@@ -51,6 +51,14 @@
       update_cache: yes
     when: ansible_distribution == "Ubuntu"
 
+  - name: start httpd (Ubuntu)
+    tags: apache,apache2,ubuntu
+    service:
+      name: apache2
+      state: restarted
+      enabled: yes
+    when: ansible_distribution == "Ubuntu"
+
   - name: install apache2 and php packages for CentOS servers
     tags: apache,centos,httpd
     dnf: 
@@ -60,6 +68,30 @@
       state: latest
       update_cache: yes
     when: ansible_distribution == "CentOS"
+  
+  - name: start httpd (CentOS)
+    tags: apache,centos,httpd
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+    when: ansible_distribution == "CentOS"
+  
+  - name: change e-mail address for admin
+    tags: apache,apache2,ubuntu
+    lineinfile:
+      path: /etc/apache2/apache2.conf
+      regexp: '^ServerAdmin'
+      line: "#ServerAdmin somebody@somewhere.com"
+    when: ansible_distribution == "Ubuntu"
+    register: apache2
+
+  - name: restart apache2 (Ubuntu)
+    tags: apache,apache2,ubuntu
+    service:
+      name: apache2
+      state: restarted
+    when: apache2.changed 
 
   - name: copy default html file for site
     tags: apache,apache2,ubuntu
