@@ -1,4 +1,5 @@
 ---
+##### PLAYS FOR ALL HOSTS #####
 
 - hosts: all
   pre_tasks:
@@ -16,6 +17,28 @@
       update_cache: yes
     when: ansible_distribution == "Ubuntu"
 
+##### PLAYS FOR WORKSTATIONS #####
+- hosts: workstations
+  tasks:
+  - name: install unzip
+    package: 
+      name: unzip
+
+  - name: install terraform
+    get_url: 
+      url: https://releases.hashicorp.com/terraform/0.12.28/terraform_0.12.28_linux_amd64.zip
+      dest: /tmp/terraform_0.12.28_linux_amd64.zip
+  
+  - name: Unarchive Terraform
+    unarchive:
+      src: /tmp/terraform_0.12.28_linux_amd64.zip
+      dest: /usr/local/bin/
+      remote_src: yes
+      mode: '0755'
+      owner: root
+      group: root
+
+##### PLAYS FOR WEB_SERVERS #####
 - hosts: web_servers
   tasks:
   - name: install apache2 and php packages for Ubuntu servers
@@ -47,6 +70,7 @@
       group: root
       mode: 0644
 
+##### PLAYS FOR DATA BASES SERVERS #####
 - hosts: db_servers
   tasks:
     - name: install mariadb package (CentOS)
@@ -63,6 +87,7 @@
         state: latest
       when: ansible_distribution == "Ubuntu"
 
+##### PLAYS FOR FILE_SERVERS #####
 - hosts: file_servers
   tasks:
     - name: install samba package
