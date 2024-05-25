@@ -1,21 +1,27 @@
 ---
 ##### PLAYS FOR ALL HOSTS #####
-
 - hosts: all
   pre_tasks:
-  - name: install updates (CentOS)
-    tags: always
-    dnf: 
-      update_only: yes
-      update_cache: yes
-    when: ansible_distribution == "CentOS"
-    
-  - name: install updates (Ubuntu)
+  - name: update repo cache (Ubuntu)
+    become: true
     tags: always
     apt:
-      upgrade: dist
       update_cache: yes
+    changed_when: false  
     when: ansible_distribution == "Ubuntu"
+  
+  - name: update repo cache (CentOS)
+    tags: always
+    dnf:
+      update_cache: yes
+    changed_when: false
+    when: ansible_distribution == "CentOS"
+      
+  - name: add ssh key for simone 
+    tags: always
+    authorized_key:
+      user: simone
+      key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCe+jmErOhC23xG598k7HY6s8fCMP7X+I/FmoJTNI0gkbtRSJftauS5LdhR58464hFpmnCOrpioD6HBZNJlvnEg9zDAyf9YuFUJ7VRnDquof04yGEOESqeFU63pEB0tRN1WxOJwPtxHBbBvQiJLieUbPsEISd5F/wUZVo6D/YIcDCP9Hqfw2SCwoIA0mmpyR+hSkrqQzjypdOlbGPPgIur3gxXGuaA6lZa5OUqCmmD/HYTZTrjsSulMvkI52z6ZCMCG/jtndOyWkGbSZ1yYYzzsV2hGBTU3+N5chBT49wPQ/QlgxD4OOUD4wpy4Ow/sGNVuVg/HOiPteCHKPq6dRetZSmBIcS65flgSLcwbXX+FvUydcaipfUpF4nuN4V/r1QL3dn/1t8UT/x05G5tWVsiwhww8ja6oeJ9n/4bGNqZ6yCyZomS+P0RmCkocYu5fdfO861x5ZOyMgbmkwTBeF3f4hmvh+YloB7LiEje4WGsPzP65nJ4ey/qiE0pNuYPK0ts= ansible"
 
 ##### PLAYS FOR WORKSTATIONS #####
 - hosts: workstations
@@ -25,11 +31,13 @@
       name: unzip
 
   - name: install terraform
+    become: true
     get_url: 
       url: https://releases.hashicorp.com/terraform/0.12.28/terraform_0.12.28_linux_amd64.zip
       dest: /tmp/terraform_0.12.28_linux_amd64.zip
   
   - name: Unarchive Terraform
+    become: true
     unarchive:
       src: /tmp/terraform_0.12.28_linux_amd64.zip
       dest: /usr/local/bin/
@@ -42,6 +50,7 @@
 - hosts: web_servers
   tasks:
   - name: install apache2 and php packages for Ubuntu servers
+    become: true
     tags: apache,apache2,ubuntu
     apt:
       name:
@@ -51,15 +60,45 @@
       update_cache: yes
     when: ansible_distribution == "Ubuntu"
 
-  - name: start httpd (Ubuntu)
+  - name: start apache2 (Ubuntu)
+    become: true
+    tags: apache,apache2,ubuntu
+    service:
+      name: apache2
+      state: started
+      enabled: yes
+    when: ansible_distribution == "Ubuntu"
+
+  - name: change e-mail address for admin
+    become: true
+    tags: apache,apache2,ubuntu
+    lineinfile:
+      path: /etc/apache2/apache2.conf
+      regexp: '^ServerAdmin'
+      line: "#ServerAdmin somebody@somewhere.com"
+    when: ansible_distribution == "Ubuntu"
+    register: apache2
+
+  - name: restart apache2 (Ubuntu)
+    become: true
     tags: apache,apache2,ubuntu
     service:
       name: apache2
       state: restarted
-      enabled: yes
-    when: ansible_distribution == "Ubuntu"
+    when: apache2.changed
 
+  - name: copy default html file for site
+    become: true
+    tags: apache,apache2,ubuntu
+    copy:
+      src: default_site.html
+      dest: /var/www/html/index.html
+      owner: root
+      group: root
+      mode: 0644      
+      
   - name: install apache2 and php packages for CentOS servers
+    become: true
     tags: apache,centos,httpd
     dnf: 
       name:
@@ -77,34 +116,17 @@
       enabled: yes
     when: ansible_distribution == "CentOS"
   
-  - name: change e-mail address for admin
-    tags: apache,apache2,ubuntu
-    lineinfile:
-      path: /etc/apache2/apache2.conf
-      regexp: '^ServerAdmin'
-      line: "#ServerAdmin somebody@somewhere.com"
-    when: ansible_distribution == "Ubuntu"
-    register: apache2
-
-  - name: restart apache2 (Ubuntu)
-    tags: apache,apache2,ubuntu
-    service:
-      name: apache2
-      state: restarted
-    when: apache2.changed 
-
-  - name: copy default html file for site
-    tags: apache,apache2,ubuntu
-    copy:
-      src: default_site.html
-      dest: /var/www/html/index.html
-      owner: root
-      group: root
-      mode: 0644
-
 ##### PLAYS FOR DATA BASES SERVERS #####
 - hosts: db_servers
   tasks:
+    - name: install mariadn package (Ubuntu)
+      become: true  
+      tags: db,mariadb,ubuntu
+      apt:
+        name: mariadb-server
+        state: latest
+      when: ansible_distribution == "Ubuntu"
+
     - name: install mariadb package (CentOS)
       tags: centos,db,mariadb
       dnf:
@@ -112,17 +134,11 @@
         state: latest
       when: ansible_distribution == "CentOS"
 
-    - name: install mariadn package (Ubuntu)
-      tags: db,mariadb,ubuntu
-      apt:
-        name: mariadb-server
-        state: latest
-      when: ansible_distribution == "Ubuntu"
-
 ##### PLAYS FOR FILE_SERVERS #####
 - hosts: file_servers
   tasks:
     - name: install samba package
+      become: true
       tags: samba
       package:
         name: samba
